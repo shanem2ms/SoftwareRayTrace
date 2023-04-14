@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Sockets;
 using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -25,6 +26,9 @@ namespace SoftwareRayTrace
     public partial class MainWindow : Window
     {
         WriteableBitmap writeableBitmap;
+        MipArray mipArray;
+        int curLod = 0;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -41,27 +45,19 @@ namespace SoftwareRayTrace
             RenderOptions.SetEdgeMode(this.img, EdgeMode.Aliased);
             this.img.Source = writeableBitmap;
 
-            img.Stretch = Stretch.UniformToFill;
+            img.Stretch = Stretch.Uniform;
             img.HorizontalAlignment = HorizontalAlignment.Left;
             img.VerticalAlignment = VerticalAlignment.Top;
 
-            Mip pixels = LoadPng("na.png");
-            DrawTiles(pixels);
-        }
-
-        struct Mip
-        {
-            public nint data;
-            public int width;
-        }
-
-        struct MipArray
-        {
-            public MipArray(Mip basemip)
+            mipArray = LoadPng("na.png");
+            for (int i = 0; i < mipArray.mips.Length; i++)
             {
-
+                this.LODCb.Items.Add(i.ToString());
             }
+            DrawTiles();
         }
+
+        
 
         MipArray LoadPng(string f)
         {
@@ -100,7 +96,7 @@ namespace SoftwareRayTrace
         }
 
 
-        void DrawTiles(Mip mip)
+        void DrawTiles()
         {
             if (writeableBitmap == null)
                 return;
@@ -112,10 +108,9 @@ namespace SoftwareRayTrace
                 for (int y = 0; y < 256; y++)
                 {
                     nint pRowPtr = pBackBuffer + y * writeableBitmap.BackBufferStride;
-                    nint srcPtr = mip.data + y * (mip.width * 2);
                     for (int x = 0; x < 256; x++)
                     {
-                        ushort val = *((ushort*)srcPtr);
+                        ushort val = mipArray.SampleLod((x + 0.5f) / 256.0f , (y + 0.5f) / 256.0f, curLod);
                         int ival = (int)val >> 8;
                         // Compute the pixel's color.
                         int color_data = ival << 16; // R
@@ -124,12 +119,17 @@ namespace SoftwareRayTrace
 
                         *((int*)pRowPtr) = color_data;
                         pRowPtr += 4;
-                        srcPtr += 2;
                     }
                 }
             }
             writeableBitmap.AddDirtyRect(new Int32Rect(0, 0, 256, 256));
             writeableBitmap.Unlock();
+        }
+
+        private void LODCb_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            curLod = int.Parse((string)this.LODCb.SelectedItem);
+            DrawTiles();
         }
     }
 }

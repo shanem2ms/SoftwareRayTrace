@@ -5,8 +5,16 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:SoftwareRayTrace"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="MainWindow" Height="750" Width="720">
     <Grid>
-        <Image Grid.Row="2" x:Name="img"/>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <StackPanel Orientation="Horizontal">
+            <TextBlock Text="LOD" Margin="5,5"/>
+            <ComboBox x:Name="LODCb" SelectionChanged="LODCb_SelectionChanged" />
+        </StackPanel>
+        <Image Grid.Row="1" x:Name="img"/>
     </Grid>
 </Window>
