@@ -27,7 +27,6 @@ namespace SoftwareRayTrace
     /// </summary>
     public partial class MainWindow : Window
     {
-        WriteableBitmap writeableBitmap;
         MipArray mipArray;
         int curLod = 0;
         struct Ray
@@ -45,6 +44,13 @@ namespace SoftwareRayTrace
             public Vector3 pos;
             public Vector3 dir;
         }
+
+        class TraceStep
+        {
+            public Ray ray;
+            public int lod;
+        }
+
 
         struct Plane
         {
@@ -73,22 +79,17 @@ namespace SoftwareRayTrace
             new Plane(-1, new Vector3(0,0,-1)),
         };
 
-        Ray curRay;
+        TraceStep curTs;
+        Draw topDown;
         public MainWindow()
         {
             InitializeComponent();
 
-            writeableBitmap = new WriteableBitmap(
-            (int)256,
-            (int)256,
-            96,
-            96,
-            PixelFormats.Bgr32,
-            null);
-            
+
+            topDown = new Draw();
             RenderOptions.SetBitmapScalingMode(this.topDownView, BitmapScalingMode.NearestNeighbor);
             RenderOptions.SetEdgeMode(this.topDownView, EdgeMode.Aliased);
-            this.topDownView.Source = writeableBitmap;
+            this.topDownView.Source = topDown.writeableBitmap;
 
             topDownView.Stretch = Stretch.Uniform;
             topDownView.HorizontalAlignment = HorizontalAlignment.Left;
@@ -98,17 +99,30 @@ namespace SoftwareRayTrace
             {
                 this.LODCb.Items.Add(i.ToString());
             }
-            CastRay(new Ray(new Vector3(0.7f, 1.0f, 0.5f), new Vector3(-0.2f, -1, 0)));
+            this.curTs = new TraceStep()
+            {
+                lod = this.mipArray.MaxLod,
+                ray = new Ray(new Vector3(0.7f, 1.0f, 0.9f), new Vector3(-0.2f, -1, 0))
+            };
             Repaint();
         }
 
-        int RGBToI(byte R, byte G, byte B)
+        protected override void OnKeyDown(KeyEventArgs e)
         {
-            int color_data = R << 16; // R
-            color_data |= G << 8;   // G
-            color_data |= B << 0;   // B
-
-            return color_data;
+            if (e.Key == Key.A)
+            {
+                Trace(this.curTs);
+                Repaint();
+            }
+            base.OnKeyDown(e);
+        }
+        void Repaint()
+        {
+            this.topDown.Begin();
+            this.topDown.DrawTiles(this.mipArray, this.curTs.lod);
+            this.topDown.DrawPoint(new Vector2(
+                this.curTs.ray.pos.X, this.curTs.ray.pos.Y), Draw.RGBToI(255,0,0));
+            this.topDown.End();
         }
 
         void DrawRayLine()
@@ -117,126 +131,54 @@ namespace SoftwareRayTrace
             int minPlane = -1;
             for (int i = 0; i < SidePlanes.Length; ++i)
             {
-                float t = SidePlanes[i].Intersect(this.curRay);
+                float t = SidePlanes[i].Intersect(this.curTs.ray);
                 if (t > 0 && t < mint)
                 {
                     minPlane = i;
                     mint = t;
                 }
             }
-            Vector3 endPt = this.curRay.AtT(mint);
-            DrawLine(new Vector2(this.curRay.pos.X, this.curRay.pos.Y), new Vector2(endPt.X, endPt.Y), RGBToI(255, 255, 0));
+            Vector3 endPt = this.curTs.ray.AtT(mint);
+            this.topDown.DrawLine(new Vector2(this.curTs.ray.pos.X, this.curTs.ray.pos.Y), new Vector2(endPt.X, endPt.Y), Draw.RGBToI(255, 255, 0));
 
         }
-        void Repaint()
+        void FindIntersectionPixels(Ray ray, int lod)
         {
-            if (writeableBitmap == null)
-                return;
-            writeableBitmap.Lock();
-            DrawTiles();
-            DrawRayLine();
-            writeableBitmap.AddDirtyRect(new Int32Rect(0, 0, 256, 256));
-            writeableBitmap.Unlock();
-        }
-
-
-
-        unsafe void DrawTiles()
-        {
-            // Get a pointer to the back buffer.
-            nint pBackBuffer = writeableBitmap.BackBuffer;
-            for (int y = 0; y < 256; y++)
+            Mip mip = mipArray.mips[lod];
+            Vector2 pixelSize = new Vector2(1.0f / mip.width, 1.0f / mip.height);
+            float dist = pixelSize.Length();
+            Ray cr = ray;
+            while (cr.pos.X >= 0 && cr.pos.Y >= 0)
             {
-                nint pRowPtr = pBackBuffer + y * writeableBitmap.BackBufferStride;
-                for (int x = 0; x < 256; x++)
-                {
-                    float val = mipArray.SampleLod((x + 0.5f) / 256.0f , (y + 0.5f) / 256.0f, curLod);                    
-                    *((int*)pRowPtr) = RGBToI((byte)(val * 255.0f), (byte)(val * 255.0f), (byte)(val * 255.0f));
-                    pRowPtr += 4;
-                }
+                Vector3 p = cr.AtT(dist * 0.5f);
+                this.topDown.DrawPoint(new Vector2(p.X, p.Y), Draw.RGBToI(255, 0, 0));
+                cr.pos = p;
             }
         }
 
-        unsafe void DrawLine(Vector2 start, Vector2 end, int color)
+        void Trace(TraceStep ts)
         {
-            nint pBackBuffer = writeableBitmap.BackBuffer;
-            Vector2 dir = end - start;
-            if (Math.Abs(dir.X) > Math.Abs(dir.Y))
+            Mip mip = mipArray.mips[ts.lod];
+            Vector2 pixelSize = new Vector2(1.0f / mip.width, 1.0f / mip.height);
+            float dist = pixelSize.Length();
+            Vector3 p = ts.ray.AtT(dist * 0.5f);
+            float val = mip.Sample(p.X, p.Y);
+            if (p.Z < val)
             {
-                int yStart = (int)(start.Y * 256);
-                int xStart = (int)(start.X * 256);
-                int yEnd = (int)(end.Y * 256);
-                int xEnd = (int)(end.X * 256);
-                if (yStart > yEnd)
-                {
-                    int tmp = xStart;
-                    xStart = xEnd;
-                    xEnd = tmp;
-                    tmp = yStart;
-                    yStart = yEnd;
-                    yEnd = tmp;
-                }
-
-                bool ishorizontal = dir.Y == 0;
-                float slope = dir.X / dir.Y;
-                for (int y = yStart; y <= yEnd; ++y)
-                {
-                    int xs = ishorizontal ? xStart : (int)((y - yStart) * slope) + xStart;
-                    int xe = ishorizontal ? xEnd : (int)((y - yStart + 1) * slope) + xStart;
-                    nint pRowPtr = pBackBuffer + y * writeableBitmap.BackBufferStride;
-                    for (int x = xs; x < xe; ++x)
-                    {
-                        if (y < 0 || y > 255 || x < 0 || x > 255)
-                            continue;
-                        nint pCur = pRowPtr + x * 4;
-                        *((int*)pCur) = color;
-                    }
-                }
+                ts.lod--;
             }
             else
             {
-                int yStart = (int)(start.Y * 256);
-                int yEnd = (int)(end.Y * 256);
-                int xStart = (int)(start.X * 256);
-                int xEnd = (int)(end.X * 256);
-                float slope = dir.Y / dir.X;
-                if (xStart > xEnd)
-                {
-                    int tmp = xStart;
-                    xStart = xEnd;
-                    xEnd = tmp;
-                    tmp = yStart;
-                    yStart = yEnd;
-                    yEnd = tmp;
-                }
-                bool isvertical = dir.X == 0;
-                for (int x = xStart; x <= xEnd; ++x)
-                {
-                    int ys = isvertical ? Math.Min(yStart, yEnd) : (int)((x - xStart) * slope) + yStart;
-                    int ye = isvertical ? Math.Max(yEnd, yStart) : (int)((x - xStart + 1) * slope) + yStart;
-                    for (int y = ys; y < ye; ++y)
-                    {
-                        if (y < 0 || y > 255 || x < 0 || x > 255)
-                            continue;
-                        nint pRowPtr = pBackBuffer + y * writeableBitmap.BackBufferStride;
-                        nint pCur = pRowPtr + x * 4;
-                        *((int*)pCur) = color;
-                    }
-                }
-
+                ts.ray.pos = p;
+                ts.lod++;
             }
         }
 
 
-        void CastRay(Ray ray)
-        {            
-            this.curRay = ray;
-            
-            for (int lod = mipArray.mips.Length - 1; lod >= 0; --lod)
-            {
-                Mip mip = mipArray.mips[lod];
-                Vector2 pixelSize = new Vector2(1.0f / mip.width, 1.0f / mip.height);
-            }
+        bool RayCast(Ray ray)
+        {
+            TraceStep ts = new TraceStep { lod = this.mipArray.MaxLod, ray = ray };
+            return false;
         }
 
         private void LODCb_SelectionChanged(object sender, SelectionChangedEventArgs e)

@@ -29,6 +29,8 @@ namespace SoftwareRayTrace
     struct MipArray
     {
         public Mip[] mips;
+
+        public int MaxLod => mips.Length - 1;
         public MipArray(Mip basemip)
         {
             int nLevels = (int)Math.Log2(basemip.width) + 1;
