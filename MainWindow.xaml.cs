@@ -28,72 +28,13 @@ namespace SoftwareRayTrace
     public partial class MainWindow : Window
     {
         MipArray mipArray;
-        int curLod = 0;
-        struct Ray
-        {
-            public Ray(Vector3 p, Vector3 d)
-            {
-                pos = p;
-                dir = Vector3.Normalize(d);
-            }
-
-            public Vector3 AtT(float t)
-            {
-                return pos + t * dir;
-            }
-            public Vector3 pos;
-            public Vector3 dir;
-        }
-
-        class TraceStep
-        {
-            public Ray ray;
-            public int lod;
-        }
-
-
-        struct Plane
-        {
-            public Plane(float _d, Vector3 _n)
-            {
-                d = _d;
-                nrm = Vector3.Normalize(_n);
-            }
-
-            public Vector3 nrm;
-            public float d;
-
-            public float Intersect(Ray r)
-            {
-                return -(Vector3.Dot(r.pos, nrm) + d) / Vector3.Dot(r.dir, nrm);
-            }
-        }
-
-        static Plane[] SidePlanes =
-        {
-            new Plane(0, new Vector3(1,0,0)),
-            new Plane(-1, new Vector3(-1,0,0)),
-            new Plane(0, new Vector3(0,1,0)),
-            new Plane(-1, new Vector3(0,-1,0)),
-            new Plane(0, new Vector3(0,0,1)),
-            new Plane(-1, new Vector3(0,0,-1)),
-        };
-
+        int curLod = 5;
+        
         TraceStep curTs;
-        Draw topDown;
         public MainWindow()
         {
             InitializeComponent();
 
-
-            topDown = new Draw();
-            RenderOptions.SetBitmapScalingMode(this.topDownView, BitmapScalingMode.NearestNeighbor);
-            RenderOptions.SetEdgeMode(this.topDownView, EdgeMode.Aliased);
-            this.topDownView.Source = topDown.writeableBitmap;
-
-            topDownView.Stretch = Stretch.Uniform;
-            topDownView.HorizontalAlignment = HorizontalAlignment.Left;
-            topDownView.VerticalAlignment = VerticalAlignment.Top;
             mipArray = MipArray.LoadPng("na.png");
             for (int i = 0; i < mipArray.mips.Length; i++)
             {
@@ -119,9 +60,11 @@ namespace SoftwareRayTrace
         void Repaint()
         {
             this.topDown.Begin();
-            this.topDown.DrawTiles(this.mipArray, this.curTs.lod);
+            this.topDown.DrawTiles(this.mipArray, this.curLod);
+            FindIntersectionPixels(this.curTs.ray, this.curLod);
+            /*
             this.topDown.DrawPoint(new Vector2(
-                this.curTs.ray.pos.X, this.curTs.ray.pos.Y), Draw.RGBToI(255,0,0));
+                this.curTs.ray.pos.X, this.curTs.ray.pos.Y), Draw.RGBToI(255,0,0));*/
             this.topDown.End();
         }
 
@@ -129,9 +72,9 @@ namespace SoftwareRayTrace
         {
             float mint = float.MaxValue;
             int minPlane = -1;
-            for (int i = 0; i < SidePlanes.Length; ++i)
+            for (int i = 0; i < Cube.SidePlanes.Length; ++i)
             {
-                float t = SidePlanes[i].Intersect(this.curTs.ray);
+                float t = Cube.SidePlanes[i].Intersect(this.curTs.ray);
                 if (t > 0 && t < mint)
                 {
                     minPlane = i;
@@ -139,19 +82,21 @@ namespace SoftwareRayTrace
                 }
             }
             Vector3 endPt = this.curTs.ray.AtT(mint);
-            this.topDown.DrawLine(new Vector2(this.curTs.ray.pos.X, this.curTs.ray.pos.Y), new Vector2(endPt.X, endPt.Y), Draw.RGBToI(255, 255, 0));
+            this.topDown.DrawLine(new Vector2(this.curTs.ray.pos.X, this.curTs.ray.pos.Y), new Vector2(endPt.X, endPt.Y), DrawCtrl.RGBToI(255, 255, 0));
 
         }
         void FindIntersectionPixels(Ray ray, int lod)
         {
             Mip mip = mipArray.mips[lod];
-            Vector2 pixelSize = new Vector2(1.0f / mip.width, 1.0f / mip.height);
-            float dist = pixelSize.Length();
+            int xPos = (int)(mip.width * ray.pos.X);
+            int yPos = (int)(mip.height * ray.pos.Y);
+            Vector2 invscale = new Vector2(1.0f / mip.width, 1.0f / mip.height);
             Ray cr = ray;
+            cr.pos = 
             while (cr.pos.X >= 0 && cr.pos.Y >= 0)
             {
-                Vector3 p = cr.AtT(dist * 0.5f);
-                this.topDown.DrawPoint(new Vector2(p.X, p.Y), Draw.RGBToI(255, 0, 0));
+                
+                this.topDown.DrawPoint(new Vector2(p.X, p.Y), DrawCtrl.RGBToI(255, 0, 0));
                 cr.pos = p;
             }
         }

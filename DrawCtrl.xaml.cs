@@ -1,23 +1,30 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows.Input;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
+using System.Windows.Shapes;
 
 namespace SoftwareRayTrace
 {
-    internal class Draw
+    /// <summary>
+    /// Interaction logic for DrawCtrl.xaml
+    /// </summary>
+    public partial class DrawCtrl : Image
     {
         public WriteableBitmap writeableBitmap;
-
-        public Draw()
+        public DrawCtrl()
         {
+            InitializeComponent();
             writeableBitmap = new WriteableBitmap(
             (int)256,
             (int)256,
@@ -25,10 +32,15 @@ namespace SoftwareRayTrace
             96,
             PixelFormats.Bgr32,
             null);
+            RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.NearestNeighbor);
+            RenderOptions.SetEdgeMode(this, EdgeMode.Aliased);
+            this.Source = writeableBitmap;
+
+            this.Stretch = Stretch.Uniform;
+            this.HorizontalAlignment = HorizontalAlignment.Left;
+            this.VerticalAlignment = VerticalAlignment.Top;
         }
 
-        
-       
 
         public static int RGBToI(byte R, byte G, byte B)
         {
@@ -73,7 +85,7 @@ namespace SoftwareRayTrace
             nint pBackBuffer = writeableBitmap.BackBuffer;
             for (int y = ymid - 1; y <= ymid + 1; ++y)
             {
-                for (int x = xmid - 1; x <= xmid +1; ++x)
+                for (int x = xmid - 1; x <= xmid + 1; ++x)
                 {
                     if (x < 0 || x >= 256 || y < 0 || y >= 256)
                         continue;

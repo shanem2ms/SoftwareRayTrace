@@ -10,7 +10,7 @@ using System.Windows.Media.Media3D;
 
 namespace SoftwareRayTrace
 {
-    struct Mip
+    public struct Mip
     {
         public nint data;
         public int width;
@@ -26,7 +26,7 @@ namespace SoftwareRayTrace
         }
     }
 
-    struct MipArray
+    public struct MipArray
     {
         public Mip[] mips;
 
