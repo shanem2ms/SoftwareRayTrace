@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Numerics;
+using System.Windows.Media;
 
 namespace SoftwareRayTrace
 {
@@ -62,6 +63,12 @@ namespace SoftwareRayTrace
 
     internal class RayUtils
     {
-
+        public static Vector3 IntersectXYPlance(Ray r, float xplane, float yplane)
+        {
+            float slope = r.dir.X / r.dir.Y;
+            float tXPlane = (xplane - r.pos.X) / r.dir.X;
+            float tYPlane = (yplane - r.pos.Y) / r.dir.Y;
+            return r.AtT(Math.Min(tXPlane, tYPlane));
+        }
     }
 }

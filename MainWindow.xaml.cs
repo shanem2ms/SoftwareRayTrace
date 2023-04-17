@@ -17,7 +17,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
-using System.Windows.Shapes;
+using System.Diagnostics;
 using static System.Net.WebRequestMethods;
 
 namespace SoftwareRayTrace
@@ -45,7 +45,19 @@ namespace SoftwareRayTrace
                 lod = this.mipArray.MaxLod,
                 ray = new Ray(new Vector3(0.7f, 1.0f, 0.9f), new Vector3(-0.2f, -1, 0))
             };
+
+            this.topDown.MouseDown += TopDown_MouseDown;
             Repaint();
+        }
+
+        private void TopDown_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            double xPos = e.GetPosition(this.topDown).X / this.topDown.ActualWidth;
+            double yPos = e.GetPosition(this.topDown).Y / this.topDown.ActualHeight;
+
+            this.curTs.ray = new Ray(new Vector3((float)xPos, 1.0f, 0.9f), new Vector3(-0.2f, -1, 0));
+            Repaint();
+            //Debug.WriteLine($"{xPos} {yPos}");
         }
 
         protected override void OnKeyDown(KeyEventArgs e)
@@ -62,9 +74,6 @@ namespace SoftwareRayTrace
             this.topDown.Begin();
             this.topDown.DrawTiles(this.mipArray, this.curLod);
             FindIntersectionPixels(this.curTs.ray, this.curLod);
-            /*
-            this.topDown.DrawPoint(new Vector2(
-                this.curTs.ray.pos.X, this.curTs.ray.pos.Y), Draw.RGBToI(255,0,0));*/
             this.topDown.End();
         }
 
@@ -88,16 +97,42 @@ namespace SoftwareRayTrace
         void FindIntersectionPixels(Ray ray, int lod)
         {
             Mip mip = mipArray.mips[lod];
-            int xPos = (int)(mip.width * ray.pos.X);
-            int yPos = (int)(mip.height * ray.pos.Y);
             Vector2 invscale = new Vector2(1.0f / mip.width, 1.0f / mip.height);
             Ray cr = ray;
-            cr.pos = 
-            while (cr.pos.X >= 0 && cr.pos.Y >= 0)
+            cr.pos = ray.pos * new Vector3(mip.width, mip.height, 1);
+
+            bool leftPlane = cr.dir.X < 0;
+            bool backPlane = cr.dir.Y < 0;
+            float epsilon = mip.width / 100.0f;
+            float prevZ = cr.pos.Z;
+            while (cr.pos.X > 0 && cr.pos.Y > 0)
             {
+                Vector2 origPos = new Vector2(cr.pos.X, cr.pos.Y);
+                float nextPlaneX = leftPlane ? MathF.Truncate(cr.pos.X - epsilon) :
+                    MathF.Truncate(cr.pos.X + epsilon + 1);
+                float nextPlaneY = backPlane ? MathF.Truncate(cr.pos.Y - epsilon) :
+                    MathF.Truncate(cr.pos.Y + epsilon + 1);
+
+                cr.pos = RayUtils.IntersectXYPlance(cr, nextPlaneX, nextPlaneY);
+                float nx = MathF.Truncate((origPos.X + cr.pos.X) * 0.5f) + 0.5f;
+                float ny = MathF.Truncate((origPos.Y + cr.pos.Y) * 0.5f) + 0.5f;
                 
-                this.topDown.DrawPoint(new Vector2(p.X, p.Y), DrawCtrl.RGBToI(255, 0, 0));
-                cr.pos = p;
+
+                Vector2 np = new Vector2(nx, ny) * invscale;
+                Vector2 p = new Vector2(cr.pos.X, cr.pos.Y) * invscale;
+
+                float v = mip.Sample(np.X, np.Y);
+                bool isHit = false;
+                if (prevZ < v || cr.pos.Z < v)
+                {
+                    isHit = true;
+                    // Hit
+                }
+
+                prevZ = cr.pos.Z;
+                //this.topDown.DrawLine(new Vector2(p.X, p.Y), new Vector2(np.X, np.Y), DrawCtrl.RGBToI(0, 0, 255));
+                this.topDown.DrawPoint(new Vector2(p.X, p.Y), isHit ? 1: 0, isHit ? DrawCtrl.RGBToI(255, 0, 255) : DrawCtrl.RGBToI(255, 0, 0));
+                if (isHit) break;
             }
         }
 

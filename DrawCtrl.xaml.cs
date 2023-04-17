@@ -41,7 +41,6 @@ namespace SoftwareRayTrace
             this.VerticalAlignment = VerticalAlignment.Top;
         }
 
-
         public static int RGBToI(byte R, byte G, byte B)
         {
             int color_data = R << 16; // R
@@ -77,15 +76,15 @@ namespace SoftwareRayTrace
                 }
             }
         }
-        public unsafe void DrawPoint(Vector2 pos, int color)
+        public unsafe void DrawPoint(Vector2 pos, int pad, int color)
         {
             int ymid = (int)(pos.Y * 256);
             int xmid = (int)(pos.X * 256);
 
             nint pBackBuffer = writeableBitmap.BackBuffer;
-            for (int y = ymid - 1; y <= ymid + 1; ++y)
+            for (int y = ymid - pad; y <= ymid + pad; ++y)
             {
-                for (int x = xmid - 1; x <= xmid + 1; ++x)
+                for (int x = xmid - pad; x <= xmid + pad; ++x)
                 {
                     if (x < 0 || x >= 256 || y < 0 || y >= 256)
                         continue;
@@ -108,12 +107,8 @@ namespace SoftwareRayTrace
                 int xEnd = (int)(end.X * 256);
                 if (yStart > yEnd)
                 {
-                    int tmp = xStart;
-                    xStart = xEnd;
-                    xEnd = tmp;
-                    tmp = yStart;
-                    yStart = yEnd;
-                    yEnd = tmp;
+                    (xStart, xEnd) = (xEnd, xStart);
+                    (yStart, yEnd) = (yEnd, yStart);
                 }
 
                 bool ishorizontal = dir.Y == 0;
@@ -123,6 +118,7 @@ namespace SoftwareRayTrace
                     int xs = ishorizontal ? xStart : (int)((y - yStart) * slope) + xStart;
                     int xe = ishorizontal ? xEnd : (int)((y - yStart + 1) * slope) + xStart;
                     nint pRowPtr = pBackBuffer + y * writeableBitmap.BackBufferStride;
+                    if (xs > xe) (xs, xe) = (xe, xs);
                     for (int x = xs; x < xe; ++x)
                     {
                         if (y < 0 || y > 255 || x < 0 || x > 255)
@@ -141,18 +137,15 @@ namespace SoftwareRayTrace
                 float slope = dir.Y / dir.X;
                 if (xStart > xEnd)
                 {
-                    int tmp = xStart;
-                    xStart = xEnd;
-                    xEnd = tmp;
-                    tmp = yStart;
-                    yStart = yEnd;
-                    yEnd = tmp;
+                    (xStart, xEnd) = (xEnd, xStart);
+                    (yStart, yEnd) = (yEnd, yStart);
                 }
                 bool isvertical = dir.X == 0;
                 for (int x = xStart; x <= xEnd; ++x)
                 {
-                    int ys = isvertical ? Math.Min(yStart, yEnd) : (int)((x - xStart) * slope) + yStart;
-                    int ye = isvertical ? Math.Max(yEnd, yStart) : (int)((x - xStart + 1) * slope) + yStart;
+                    int ys = isvertical ? yStart : (int)((x - xStart) * slope) + yStart;
+                    int ye = isvertical ? yEnd : (int)((x - xStart + 1) * slope) + yStart;
+                    if (ys > ye) (ys, ye) = (ye, ys);
                     for (int y = ys; y < ye; ++y)
                     {
                         if (y < 0 || y > 255 || x < 0 || x > 255)
