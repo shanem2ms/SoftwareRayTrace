@@ -30,7 +30,22 @@ namespace SoftwareRayTrace
     {
         MipArray mipArray;
         int curLod = 5;
+        Matrix4x4 projMat = Matrix4x4.CreateScale(1, 1, -1) *
+                Matrix4x4.CreatePerspectiveFieldOfView(60.0f * MathF.PI / 180.0f, 1.0f, 0.01f, 1);
         
+        Vector3 pos = Vector3.Zero;
+
+
+        public Matrix4x4 InvMat
+        {
+            get
+            {
+                Matrix4x4 inv;
+                Matrix4x4.Invert(projMat * Matrix4x4.CreateTranslation(pos), out inv);
+                return inv;
+            }
+        }
+
         TraceStep curTs;
         public MainWindow()
         {
@@ -44,10 +59,21 @@ namespace SoftwareRayTrace
             this.curTs = new TraceStep()
             {
                 lod = this.mipArray.MaxLod,
-                ray = new Ray(new Vector3(0.7f, 0.9f, 1.0f), new Vector3(0, 0, -1))
+                ray = new Ray(new Vector3(0.7f, 0.9f, 0.0f), new Vector3(0, 0, 1))
             };
 
             this.topDown.MouseDown += TopDown_MouseDown;
+            this.camView.MouseDown += CamView_MouseDown;
+            Repaint();
+        }
+
+        private void CamView_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            double xPos = e.GetPosition(this.topDown).X / this.topDown.ActualWidth;
+            double yPos = e.GetPosition(this.topDown).Y / this.topDown.ActualHeight;
+            Vector2 vps = new Vector2((float)xPos, (float)(1 - yPos));
+            Ray r = RayUtils.RayFromView(vps, InvMat);
+            this.curTs.ray = r;
             Repaint();
         }
 
@@ -58,27 +84,53 @@ namespace SoftwareRayTrace
 
             if (e.LeftButton == MouseButtonState.Pressed)
             {
-                this.curTs.ray = new Ray(new Vector3((float)xPos, 0.9f, 1.0f), this.curTs.ray.dir);
+                this.curTs.ray = new Ray(new Vector3((float)xPos, 0.9f, 0.0f), this.curTs.ray.dir);
             }
             else
             {
-                this.curTs.ray = new Ray(this.curTs.ray.pos, new Vector3((float)xPos, 0.9f, 0.0f) - this.curTs.ray.pos);
+                this.curTs.ray = new Ray(this.curTs.ray.pos, new Vector3((float)xPos, 0.9f, 1.0f) - this.curTs.ray.pos);
             }
             Repaint();
             //Debug.WriteLine($"{xPos} {yPos}");
         }
 
+        float speed = 0.01f;
         protected override void OnKeyDown(KeyEventArgs e)
         {
-            if (e.Key == Key.A)
+            if (e.Key == Key.Right)
             {
                 Trace(this.curTs);
                 Repaint();
             }
+
+            switch (e.Key)
+            {
+                case Key.W:
+                    this.pos.Z += speed;
+                    break;
+                case Key.S:
+                    this.pos.Z -= speed;
+                    break;
+                case Key.A:
+                    this.pos.X += speed;
+                    break;
+                case Key.D:
+                    this.pos.X -= speed;
+                    break;
+                case Key.Q:
+                    this.pos.Y += speed;
+                    break;
+                case Key.Z:
+                    this.pos.Y -= speed;
+                    break;
+            }
+            Repaint();
             base.OnKeyDown(e);
         }
         void Repaint()
         {
+            this.rayPos.Text = this.curTs.ray.pos.ToString();
+            this.rayDir.Text = this.curTs.ray.dir.ToString();
             this.topDown.Begin();
             this.topDown.DrawTiles(this.mipArray, this.curLod);
             Vector2 hitpos;
@@ -97,7 +149,7 @@ namespace SoftwareRayTrace
             this.topDown.End();
 
             this.camView.Begin();
-            this.camView.DrawView();
+            this.camView.DrawView(this.mipArray, this.InvMat);
             this.camView.End();
         }
 
@@ -148,7 +200,7 @@ namespace SoftwareRayTrace
                 float it = RayUtils.IntersectXZPlane(cr, nextPlaneX, nextPlaneY);
                 cr.pos = cr.AtT(it);
                 float nx = MathF.Floor((origPos.X + cr.pos.X) * 0.5f) + 0.5f;
-                float ny = MathF.Floor((origPos.Y + cr.pos.Y) * 0.5f) + 0.5f;               
+                float ny = MathF.Floor((origPos.Y + cr.pos.Y) * 0.5f) + 0.5f;
 
                 Vector2 np = new Vector2(nx, ny) * invscale;
                 Vector2 p = new Vector2(cr.pos.X, cr.pos.Y) * invscale;
@@ -162,7 +214,7 @@ namespace SoftwareRayTrace
 
                 prevZ = cr.pos.Z;
                 //this.topDown.DrawLine(new Vector2(p.X, p.Y), new Vector2(np.X, np.Y), DrawCtrl.RGBToI(0, 0, 255));
-                this.topDown.DrawPoint(new Vector2(p.X, p.Y), isHit ? 1: 0, isHit ? DrawCtrl.RGBToI(255, 0, 255) : DrawCtrl.RGBToI(255, 0, 0));
+                this.topDown.DrawPoint(new Vector2(p.X, p.Y), isHit ? 1 : 0, isHit ? DrawCtrl.RGBToI(255, 0, 255) : DrawCtrl.RGBToI(255, 0, 0));
                 if (isHit) break;
             }
 
@@ -171,7 +223,7 @@ namespace SoftwareRayTrace
 
         bool Raycast(Ray ray, int lod, Vector2 pixelCenter, out Vector2 outT)
         {
-            outT = new Vector2(-1,-1);
+            outT = new Vector2(-1, -1);
             bool isHit = false;
             Mip mip = mipArray.mips[lod];
             Vector2 invscale = new Vector2(1.0f / mip.width, 1.0f / mip.height);
@@ -222,7 +274,7 @@ namespace SoftwareRayTrace
                 prevY = cr.pos.Y;
                 //this.topDown.DrawLine(new Vector2(p.X, p.Y), new Vector2(np.X, np.Y), DrawCtrl.RGBToI(0, 0, 255));
                 bool foundPoint = isHit && lod == 0;
-                this.topDown.DrawPoint(new Vector2(origPos.X * invscale.X, origPos.Y * invscale.Y), foundPoint ? 1 : 0, 
+                this.topDown.DrawPoint(new Vector2(origPos.X * invscale.X, origPos.Y * invscale.Y), foundPoint ? 1 : 0,
                     foundPoint ? DrawCtrl.RGBToI(0, 255, 0) : DrawCtrl.RGBToI(255, 0, 0));
                 if (isHit) break;
             }

@@ -73,16 +73,33 @@ namespace SoftwareRayTrace
             return Math.Min(tXPlane, tYPlane);
         }
 
+
+        public static Ray RayFromView(Vector2 vps, Matrix4x4 invMat)
+        {
+            Vector4 v0 = Vector4.Transform(new Vector4(vps.X, vps.Y, 0.0f, 1), invMat);
+            Vector4 v1 = Vector4.Transform(new Vector4(vps.X, vps.Y, 1.0f, 1), invMat);
+            v0 /= v0.W;
+            v1 /= v1.W;
+
+            Vector4 dir4 = v1 - v0;
+            Vector3 dir = Vector3.Normalize(new Vector3(dir4.X, dir4.Y, dir4.Z));
+            return new Ray(new Vector3(v0.X, v0.Y, v0.Z), dir);
+        }
+
     }
 
     public class Raycaster
     {
         MipArray mipArray;
-        Raycaster(MipArray _mipArray)
+        public Raycaster(MipArray _mipArray)
         {
             mipArray = _mipArray;
         }
 
+        public bool Raycast(Ray ray, out Vector2 outT)
+        {
+            return Raycast(ray, mipArray.MaxLod, new Vector2(0.5f, 0.5f), out outT);
+        }
         bool Raycast(Ray ray, int lod, Vector2 pixelCenter, out Vector2 outT)
         {
             outT = new Vector2(-1, -1);
@@ -90,38 +107,38 @@ namespace SoftwareRayTrace
             Mip mip = mipArray.mips[lod];
             Vector2 invscale = new Vector2(1.0f / mip.width, 1.0f / mip.height);
             Ray cr = ray;
-            cr.pos = ray.pos * new Vector3(mip.width, mip.height, 1);
+            cr.pos = ray.pos * new Vector3(mip.width, 1, mip.height);
 
             bool leftPlane = cr.dir.X < 0;
-            bool backPlane = cr.dir.Y < 0;
+            bool backPlane = cr.dir.Z < 0;
             float epsilon = mip.width / 100.0f;
-            float prevZ = cr.pos.Z;
+            float prevY = cr.pos.Y;
             while (!isHit)
             {
-                Vector2 origPos = new Vector2(cr.pos.X, cr.pos.Y);
+                Vector2 origPos = new Vector2(cr.pos.X, cr.pos.Z);
                 float nextPlaneX = leftPlane ? MathF.Floor(cr.pos.X - epsilon) :
                     MathF.Floor(cr.pos.X + epsilon + 1);
-                float nextPlaneY = backPlane ? MathF.Floor(cr.pos.Y - epsilon) :
-                    MathF.Floor(cr.pos.Y + epsilon + 1);
+                float nextPlaneY = backPlane ? MathF.Floor(cr.pos.Z - epsilon) :
+                    MathF.Floor(cr.pos.Z + epsilon + 1);
 
                 float it = RayUtils.IntersectXZPlane(cr, nextPlaneX, nextPlaneY);
                 Vector3 newpos = cr.AtT(it);
                 float nx = MathF.Floor((origPos.X + newpos.X) * 0.5f) + 0.5f;
-                float ny = MathF.Floor((origPos.Y + newpos.Y) * 0.5f) + 0.5f;
+                float ny = MathF.Floor((origPos.Y + newpos.Z) * 0.5f) + 0.5f;
                 Vector2 np = new Vector2(nx, ny) * invscale;
                 if (MathF.Abs(np.X - pixelCenter.X) >= invscale.X)
                     break;
                 if (MathF.Abs(np.Y - pixelCenter.Y) >= invscale.Y)
                     break;
-                Vector2 p = new Vector2(newpos.X, newpos.Y) * invscale;
+                Vector2 p = new Vector2(newpos.X, newpos.Z) * invscale;
 
                 float v = mip.Sample(np.X, np.Y);
-                if (prevZ < v || newpos.Z < v)
+                if (prevY < v || newpos.Y < v)
                 {
                     if (lod > 0)
                     {
                         Ray r = cr;
-                        r.pos *= new Vector3(invscale.X, invscale.Y, 1);
+                        r.pos *= new Vector3(invscale.X, 1, invscale.Y);
                         isHit = Raycast(r, lod - 1, np, out outT);
                     }
                     else
@@ -133,16 +150,13 @@ namespace SoftwareRayTrace
                 }
 
                 cr.pos = newpos;
-                prevZ = cr.pos.Z;
+                prevY = cr.pos.Y;
                 //this.topDown.DrawLine(new Vector2(p.X, p.Y), new Vector2(np.X, np.Y), DrawCtrl.RGBToI(0, 0, 255));
                 bool foundPoint = isHit && lod == 0;
-                //this.topDown.DrawPoint(new Vector2(origPos.X * invscale.X, origPos.Y * invscale.Y), foundPoint ? 1 : 0,
-                //    foundPoint ? DrawCtrl.RGBToI(0, 255, 0) : DrawCtrl.RGBToI(255, 0, 0));
                 if (isHit) break;
             }
 
             return isHit;
         }
-
     }
 }

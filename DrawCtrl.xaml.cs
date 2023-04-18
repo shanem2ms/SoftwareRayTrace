@@ -161,12 +161,9 @@ namespace SoftwareRayTrace
         }
 
 
-        public unsafe void DrawView()
+        public unsafe void DrawView(MipArray mipArray, Matrix4x4 invMat)
         {
-            Matrix4x4 mat = Matrix4x4.CreateScale(1, 1, -1) *
-                Matrix4x4.CreatePerspective(1, 1, 0.01f, 1);                
-            Matrix4x4 invMat;
-            Matrix4x4.Invert(mat, out invMat);
+            Raycaster raycaster = new Raycaster(mipArray);
             nint pBackBuffer = writeableBitmap.BackBuffer;
             Vector2 scale = new Vector2(1.0f / (float)writeableBitmap.Width, 
                 1.0f / (float)writeableBitmap.Height);
@@ -176,13 +173,15 @@ namespace SoftwareRayTrace
                 for (int x = 0; x < writeableBitmap.Width; ++x )
                 {
                     Vector2 vps = new Vector2(x, y) * scale;
-                    Vector4 v0 = Vector4.Transform(new Vector4(vps.X, vps.Y, 0.0f, 1), invMat);
-                    Vector4 v1 = Vector4.Transform(new Vector4(vps.X, vps.Y, 1.0f, 1), invMat);
-                    v0 /= v0.W;
-                    v1 /= v1.W;
-                    
-                    Vector4 dir = v1 - v0;
-                    *((int*)pRowPtr) = RGBToI(0,100,255);
+                    vps.Y = 1 - vps.Y;
+                    Ray r = RayUtils.RayFromView(vps, invMat);
+                    Vector2 hitPos;
+                    if (raycaster.Raycast(r, out hitPos))
+                    {                        
+                        * ((int*)pRowPtr) = RGBToI((byte)(hitPos.X * 255), (byte)(hitPos.Y * 255), 100);
+                    }
+                    else
+                        * ((int*)pRowPtr) = RGBToI(0,100,255);
                     pRowPtr += 4;
                 }
             }
