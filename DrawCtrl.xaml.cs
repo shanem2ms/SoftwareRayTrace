@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Numerics;
 using System.Text;
@@ -156,6 +157,34 @@ namespace SoftwareRayTrace
                     }
                 }
 
+            }
+        }
+
+
+        public unsafe void DrawView()
+        {
+            Matrix4x4 mat = Matrix4x4.CreateScale(1, 1, -1) *
+                Matrix4x4.CreatePerspective(1, 1, 0.01f, 1);                
+            Matrix4x4 invMat;
+            Matrix4x4.Invert(mat, out invMat);
+            nint pBackBuffer = writeableBitmap.BackBuffer;
+            Vector2 scale = new Vector2(1.0f / (float)writeableBitmap.Width, 
+                1.0f / (float)writeableBitmap.Height);
+            for (int y = 0; y < writeableBitmap.Height; ++y )
+            {
+                nint pRowPtr = pBackBuffer + y * writeableBitmap.BackBufferStride;
+                for (int x = 0; x < writeableBitmap.Width; ++x )
+                {
+                    Vector2 vps = new Vector2(x, y) * scale;
+                    Vector4 v0 = Vector4.Transform(new Vector4(vps.X, vps.Y, 0.0f, 1), invMat);
+                    Vector4 v1 = Vector4.Transform(new Vector4(vps.X, vps.Y, 1.0f, 1), invMat);
+                    v0 /= v0.W;
+                    v1 /= v1.W;
+                    
+                    Vector4 dir = v1 - v0;
+                    *((int*)pRowPtr) = RGBToI(0,100,255);
+                    pRowPtr += 4;
+                }
             }
         }
     }
