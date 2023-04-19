@@ -24,8 +24,8 @@
                 <ColumnDefinition Width="1*"/>
                 <ColumnDefinition Width="1*"/>
             </Grid.ColumnDefinitions>
-            <local:DrawCtrl Grid.Column="0" x:Name="topDown"/>
-            <local:DrawCtrl Grid.Column="1" x:Name="camView"/>
+            <local:DrawCtrl Grid.Column="0" BitmapSize="256" x:Name="topDown"/>
+            <local:DrawCtrl Grid.Column="1" BitmapSize="1024" x:Name="camView"/>
         </Grid>
     </Grid>
 </Window>

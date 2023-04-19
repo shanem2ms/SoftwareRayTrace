@@ -20,6 +20,7 @@ using System.Windows.Navigation;
 using System.Diagnostics;
 using static System.Net.WebRequestMethods;
 using System.ComponentModel;
+using System.Threading;
 
 namespace SoftwareRayTrace
 {
@@ -30,18 +31,30 @@ namespace SoftwareRayTrace
     {
         MipArray mipArray;
         int curLod = 5;
-        Matrix4x4 projMat = Matrix4x4.CreateScale(1, 1, -1) *
-                Matrix4x4.CreatePerspectiveFieldOfView(60.0f * MathF.PI / 180.0f, 1.0f, 0.01f, 1);
-        
-        Vector3 pos = Vector3.Zero;
+        Matrix4x4 projMat = 
+                Matrix4x4.CreatePerspectiveFieldOfView(60.0f * MathF.PI / 180.0f, 1.0f, 0.01f, 100);
 
+        float yaw = -0.114556491f;
+        float pitch = -0.0398033857f;
+        Vector3 pos = new Vector3(0.01f, 0.5f, -2.11f);
+
+
+        public Matrix4x4 ViewProj
+        {
+            get
+            {
+                return Matrix4x4.CreateRotationX(yaw) *
+                    Matrix4x4.CreateRotationY(pitch) *
+                    Matrix4x4.CreateTranslation(pos) * projMat;
+            }
+        }
 
         public Matrix4x4 InvMat
         {
             get
             {
                 Matrix4x4 inv;
-                Matrix4x4.Invert(projMat * Matrix4x4.CreateTranslation(pos), out inv);
+                Matrix4x4.Invert(ViewProj, out inv);
                 return inv;
             }
         }
@@ -64,7 +77,31 @@ namespace SoftwareRayTrace
 
             this.topDown.MouseDown += TopDown_MouseDown;
             this.camView.MouseDown += CamView_MouseDown;
+            this.camView.MouseMove += CamView_MouseMove;
+            this.camView.MouseUp += CamView_MouseUp;
             Repaint();
+        }
+
+        private void CamView_MouseUp(object sender, MouseButtonEventArgs e)
+        {
+            
+        }
+
+        float yawMouseDown;
+        float yMouseDown;
+        float pitchMouseDown;
+        float xMouseDown;
+        private void CamView_MouseMove(object sender, MouseEventArgs e)
+        {
+            double xPos = e.GetPosition(this.topDown).X / this.topDown.ActualWidth;
+            double yPos = e.GetPosition(this.topDown).Y / this.topDown.ActualHeight;
+
+            if (e.LeftButton == MouseButtonState.Pressed)
+            {
+                yaw = yawMouseDown + ((float)yPos - yMouseDown);
+                pitch = pitchMouseDown + ((float)xPos - xMouseDown);
+                Repaint();
+            }
         }
 
         private void CamView_MouseDown(object sender, MouseButtonEventArgs e)
@@ -75,6 +112,11 @@ namespace SoftwareRayTrace
             Ray r = RayUtils.RayFromView(vps, InvMat);
             this.curTs.ray = r;
             Repaint();
+
+            yawMouseDown = yaw;
+            yMouseDown = (float)yPos;
+            pitchMouseDown = pitch;
+            xMouseDown = (float)xPos;
         }
 
         private void TopDown_MouseDown(object sender, MouseButtonEventArgs e)
@@ -149,7 +191,7 @@ namespace SoftwareRayTrace
             this.topDown.End();
 
             this.camView.Begin();
-            this.camView.DrawView(this.mipArray, this.InvMat);
+            this.camView.DrawViewFwd(this.mipArray, this.ViewProj);
             this.camView.End();
         }
 
