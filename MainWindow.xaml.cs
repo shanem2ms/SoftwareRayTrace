@@ -176,7 +176,7 @@ namespace SoftwareRayTrace
             this.topDown.Begin();
             this.topDown.DrawTiles(this.mipArray, this.curLod);
             Vector2 hitpos;
-            if (Raycast(this.curTs.ray, this.mipArray.MaxLod, new Vector2(0.5f, 0.5f), out hitpos))
+            if (Raycast(this.curTs.ray, out hitpos))
             {
                 float offX = hitpos.X - this.curTs.ray.pos.X;
                 float offY = hitpos.Y - this.curTs.ray.pos.Y;
@@ -195,75 +195,12 @@ namespace SoftwareRayTrace
             this.camView.End();
         }
 
-        void DrawRayLine()
+        bool Raycast(Ray ray, out Vector2 outT)
         {
-            float mint = float.MaxValue;
-            int minPlane = -1;
-            for (int i = 0; i < Cube.SidePlanes.Length; ++i)
-            {
-                float t = Cube.SidePlanes[i].Intersect(this.curTs.ray);
-                if (t > 0 && t < mint)
-                {
-                    minPlane = i;
-                    mint = t;
-                }
-            }
-            Vector3 endPt = this.curTs.ray.AtT(mint);
-            this.topDown.DrawLine(new Vector2(this.curTs.ray.pos.X, this.curTs.ray.pos.Y), new Vector2(endPt.X, endPt.Y), DrawCtrl.RGBToI(255, 255, 0));
-
+            float t= RayUtils.IntersectBoundingBox(ray, new Vector3(0, 0, 0), new Vector3(1, 1, 1));
+            return RaycastStep(ray, mipArray.MaxLod, new Vector2(0.5f, 0.5f), out outT);
         }
-
-        Vector2 FloorToSamplePixel(Vector2 pix, Vector2 scale)
-        {
-            Vector2 spix = pix * scale;
-            return new Vector2(MathF.Floor(spix.X + 0.5f) / scale.X,
-                MathF.Floor(spix.Y + 0.5f) / scale.X);
-        }
-        bool FindIntersectionPixels(Ray ray, int lod)
-        {
-            bool isHit = false;
-            Mip mip = mipArray.mips[lod];
-            Vector2 invscale = new Vector2(1.0f / mip.width, 1.0f / mip.height);
-            Ray cr = ray;
-            cr.pos = ray.pos * new Vector3(mip.width, mip.height, 1);
-
-            bool leftPlane = cr.dir.X < 0;
-            bool backPlane = cr.dir.Y < 0;
-            float epsilon = mip.width / 100.0f;
-            float prevZ = cr.pos.Z;
-            while (!isHit && cr.pos.X > 0 && cr.pos.Y > 0)
-            {
-                Vector2 origPos = new Vector2(cr.pos.X, cr.pos.Y);
-                float nextPlaneX = leftPlane ? MathF.Floor(cr.pos.X - epsilon) :
-                    MathF.Floor(cr.pos.X + epsilon + 1);
-                float nextPlaneY = backPlane ? MathF.Floor(cr.pos.Y - epsilon) :
-                    MathF.Floor(cr.pos.Y + epsilon + 1);
-
-                float it = RayUtils.IntersectXZPlane(cr, nextPlaneX, nextPlaneY);
-                cr.pos = cr.AtT(it);
-                float nx = MathF.Floor((origPos.X + cr.pos.X) * 0.5f) + 0.5f;
-                float ny = MathF.Floor((origPos.Y + cr.pos.Y) * 0.5f) + 0.5f;
-
-                Vector2 np = new Vector2(nx, ny) * invscale;
-                Vector2 p = new Vector2(cr.pos.X, cr.pos.Y) * invscale;
-
-                float v = mip.Sample(np.X, np.Y);
-                if (prevZ < v || cr.pos.Z < v)
-                {
-                    isHit = true;
-                    // Hit
-                }
-
-                prevZ = cr.pos.Z;
-                //this.topDown.DrawLine(new Vector2(p.X, p.Y), new Vector2(np.X, np.Y), DrawCtrl.RGBToI(0, 0, 255));
-                this.topDown.DrawPoint(new Vector2(p.X, p.Y), isHit ? 1 : 0, isHit ? DrawCtrl.RGBToI(255, 0, 255) : DrawCtrl.RGBToI(255, 0, 0));
-                if (isHit) break;
-            }
-
-            return isHit;
-        }
-
-        bool Raycast(Ray ray, int lod, Vector2 pixelCenter, out Vector2 outT)
+        bool RaycastStep(Ray ray, int lod, Vector2 pixelCenter, out Vector2 outT)
         {
             outT = new Vector2(-1, -1);
             bool isHit = false;
@@ -302,7 +239,7 @@ namespace SoftwareRayTrace
                     {
                         Ray r = cr;
                         r.pos *= new Vector3(invscale.X, 1, invscale.Y);
-                        isHit = Raycast(r, lod - 1, np, out outT);
+                        isHit = RaycastStep(r, lod - 1, np, out outT);
                     }
                     else
                     {

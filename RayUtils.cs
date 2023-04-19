@@ -7,6 +7,7 @@ using System.Numerics;
 using System.Windows.Media;
 using System.Collections;
 using System.Windows.Media.Imaging;
+using System.ComponentModel.DataAnnotations;
 
 namespace SoftwareRayTrace
 {
@@ -72,7 +73,36 @@ namespace SoftwareRayTrace
             float tYPlane = (yplane - r.pos.Z) / r.dir.Z;
             return Math.Min(tXPlane, tYPlane);
         }
+        
 
+        static float IntersectPlane(Ray ray, Vector3 planeOffset, Vector3 N)
+        {
+            // t = -(n·P + d)            
+            float t = 0;
+            float denom = Vector3.Dot(N, ray.dir);
+            if (MathF.Abs(denom) < 0.0001)    // Ray parallel to plane
+            {
+                return float.PositiveInfinity;
+            }
+
+            t = Vector3.Dot(N, (N * planeOffset - ray.pos)) / denom;
+
+            return t;
+        }
+
+        public static float IntersectBoundingBox(Ray r, Vector3 min, Vector3 max)
+        {
+            Vector3 scale = (max - min);
+            float outT = float.MaxValue;
+            for (int i = 0; i < 6; ++i)
+            {
+                Vector3 pos = (Cube.SidePlanes[i].d * Cube.SidePlanes[i].nrm * scale) + min;
+                float t = IntersectPlane(r, pos, Cube.SidePlanes[i].nrm);
+                if (float.IsFinite(t) && t > 0)
+                    outT = MathF.Min(t, outT);
+            }
+            return outT;
+        }
 
         public static Ray RayFromView(Vector2 vps, Matrix4x4 invMat)
         {
