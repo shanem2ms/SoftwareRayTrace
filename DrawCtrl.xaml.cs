@@ -180,12 +180,21 @@ namespace SoftwareRayTrace
                 {
                     Matrix4x4 matViewProj = Matrix4x4.CreateScale(0.1f) * 
                         Matrix4x4.CreateTranslation(new Vector3(x * 0.1f, 0, y * 0.1f)) * viewProj;
-                    DrawQuad(matViewProj);
+                    DrawQuad(matViewProj, RGBToI(255, 0, 0));
+                }
+            }
+            for (int x = 0; x < 10; ++x)
+            {
+                for (int y = 0; y < 10; ++y)
+                {
+                    Matrix4x4 matViewProj = Matrix4x4.CreateScale(0.1f) *
+                        Matrix4x4.CreateTranslation(new Vector3(x * 0.1f, 0.1f, y * 0.1f)) * viewProj;
+                    DrawQuad(matViewProj, RGBToI(0, 255, 0));
                 }
             }
         }
 
-        void DrawQuad(Matrix4x4 matViewProj)
+        void DrawQuad(Matrix4x4 matViewProj, int color)
         {
             Vector4[] p = new Vector4[4]
             {
@@ -209,7 +218,7 @@ namespace SoftwareRayTrace
                     s1 /= s1.W;
                     if (s0.Z > 0 && s0.Z < 1 && s1.Z > 0 && s1.Z < 1)
                     {
-                        DrawLine(new Vector2(s0.X, s0.Y), new Vector2(s1.X, s1.Y), RGBToI(255, 0, 0));
+                        DrawLine(new Vector2(s0.X, s0.Y), new Vector2(s1.X, s1.Y), color);
                     }
                 }
             }
@@ -237,12 +246,11 @@ namespace SoftwareRayTrace
                 for (int x = 0; x < writeableBitmap.Width; ++x )
                 {
                     Vector2 vps = new Vector2(x, y) * scale;
-                    vps.Y = 1 - vps.Y;
                     Ray r = RayUtils.RayFromView(vps, invMat);
-                    Vector2 hitPos;
+                    Vector3 hitPos;
                     if (raycaster.Raycast(r, out hitPos))
                     {                        
-                        * ((int*)pRowPtr) = RGBToI((byte)(hitPos.X * 255), (byte)(hitPos.Y * 255), 100);
+                        * ((int*)pRowPtr) = RGBToI((byte)(hitPos.Z * 255), (byte)(hitPos.Z * 255), 100);
                     }
                     else
                         * ((int*)pRowPtr) = RGBToI(0,100,255);

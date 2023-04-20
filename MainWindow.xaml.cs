@@ -21,6 +21,7 @@ using System.Diagnostics;
 using static System.Net.WebRequestMethods;
 using System.ComponentModel;
 using System.Threading;
+using System.Windows.Media.Animation;
 
 namespace SoftwareRayTrace
 {
@@ -34,18 +35,20 @@ namespace SoftwareRayTrace
         Matrix4x4 projMat = 
                 Matrix4x4.CreatePerspectiveFieldOfView(60.0f * MathF.PI / 180.0f, 1.0f, 0.01f, 100);
 
-        float yaw = -0.114556491f;
-        float pitch = -0.0398033857f;
+        float yaw = 0.08057776f;
+        float pitch = -0.06504461f;
         Vector3 pos = new Vector3(0.01f, 0.5f, -2.11f);
-
-
+        bool raycastMode = false;
+        TraceStep curTs;
         public Matrix4x4 ViewProj
         {
             get
             {
-                return Matrix4x4.CreateRotationX(yaw) *
+                return Matrix4x4.CreateScale(new Vector3(1, -1, 1)) * 
+                    Matrix4x4.CreateRotationX(yaw) *
                     Matrix4x4.CreateRotationY(pitch) *
-                    Matrix4x4.CreateTranslation(pos) * projMat;
+                    Matrix4x4.CreateTranslation(pos) *                    
+                    projMat;
             }
         }
 
@@ -58,8 +61,7 @@ namespace SoftwareRayTrace
                 return inv;
             }
         }
-
-        TraceStep curTs;
+        
         public MainWindow()
         {
             InitializeComponent();
@@ -72,7 +74,7 @@ namespace SoftwareRayTrace
             this.curTs = new TraceStep()
             {
                 lod = this.mipArray.MaxLod,
-                ray = new Ray(new Vector3(0.7f, 0.9f, 0.0f), new Vector3(0, 0, 1))
+                ray = new Ray(new Vector3(0.12873986f, 0.3276748f, 2.129348f), new Vector3(0.15054968f, -0.11253275f, -0.9821768f))
             };
 
             this.topDown.MouseDown += TopDown_MouseDown;
@@ -93,12 +95,12 @@ namespace SoftwareRayTrace
         float xMouseDown;
         private void CamView_MouseMove(object sender, MouseEventArgs e)
         {
-            double xPos = e.GetPosition(this.topDown).X / this.topDown.ActualWidth;
-            double yPos = e.GetPosition(this.topDown).Y / this.topDown.ActualHeight;
+            double xPos = e.GetPosition(this.camView).X / this.camView.ActualWidth;
+            double yPos = e.GetPosition(this.camView).Y / this.camView.ActualHeight;
 
             if (e.LeftButton == MouseButtonState.Pressed)
             {
-                yaw = yawMouseDown + ((float)yPos - yMouseDown);
+                yaw = yawMouseDown - ((float)yPos - yMouseDown);
                 pitch = pitchMouseDown + ((float)xPos - xMouseDown);
                 Repaint();
             }
@@ -106,9 +108,9 @@ namespace SoftwareRayTrace
 
         private void CamView_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            double xPos = e.GetPosition(this.topDown).X / this.topDown.ActualWidth;
-            double yPos = e.GetPosition(this.topDown).Y / this.topDown.ActualHeight;
-            Vector2 vps = new Vector2((float)xPos, (float)(1 - yPos));
+            double xPos = e.GetPosition(this.camView).X / this.camView.ActualWidth;
+            double yPos = e.GetPosition(this.camView).Y / this.camView.ActualHeight;
+            Vector2 vps = new Vector2((float)xPos, (float)(yPos));
             Ray r = RayUtils.RayFromView(vps, InvMat);
             this.curTs.ray = r;
             Repaint();
@@ -191,13 +193,20 @@ namespace SoftwareRayTrace
             this.topDown.End();
 
             this.camView.Begin();
-            this.camView.DrawViewFwd(this.mipArray, this.ViewProj);
+            if (raycastMode)
+                this.camView.DrawView(this.mipArray, this.InvMat);
+            else
+                this.camView.DrawViewFwd(this.mipArray, this.ViewProj);
             this.camView.End();
         }
 
         bool Raycast(Ray ray, out Vector2 outT)
         {
-            float t= RayUtils.IntersectBoundingBox(ray, new Vector3(0, 0, 0), new Vector3(1, 1, 1));
+            float t0, t1;
+            bool intersected = RayUtils.IntersectAABoxRay(new Vector3(0, 0, 0), new Vector3(1, 0.1f, 1), ray, out t0, out t1);
+            Vector3 hitpos = ray.AtT(t0);
+            ray.pos = hitpos;
+            this.topDown.DrawPoint(new Vector2(ray.pos.X, ray.pos.Z), 1, DrawCtrl.RGBToI(255, 0, 255));
             return RaycastStep(ray, mipArray.MaxLod, new Vector2(0.5f, 0.5f), out outT);
         }
         bool RaycastStep(Ray ray, int lod, Vector2 pixelCenter, out Vector2 outT)
@@ -207,7 +216,7 @@ namespace SoftwareRayTrace
             Mip mip = mipArray.mips[lod];
             Vector2 invscale = new Vector2(1.0f / mip.width, 1.0f / mip.height);
             Ray cr = ray;
-            cr.pos = ray.pos * new Vector3(mip.width, 1, mip.height);
+            //cr.pos = ray.pos * new Vector3(mip.width, 1, mip.height);
 
             bool leftPlane = cr.dir.X < 0;
             bool backPlane = cr.dir.Z < 0;
@@ -216,21 +225,20 @@ namespace SoftwareRayTrace
             while (!isHit)
             {
                 Vector2 origPos = new Vector2(cr.pos.X, cr.pos.Z);
-                float nextPlaneX = leftPlane ? MathF.Floor(cr.pos.X - epsilon) :
-                    MathF.Floor(cr.pos.X + epsilon + 1);
-                float nextPlaneY = backPlane ? MathF.Floor(cr.pos.Z - epsilon) :
-                    MathF.Floor(cr.pos.Z + epsilon + 1);
+                float nextPlaneX = leftPlane ? MathF.Floor(cr.pos.X * mip.width - epsilon) :
+                    MathF.Floor(cr.pos.X * mip.width + epsilon + 1);
+                float nextPlaneY = backPlane ? MathF.Floor(cr.pos.Z * mip.height - epsilon) :
+                    MathF.Floor(cr.pos.Z * mip.height + epsilon + 1);
 
-                float it = RayUtils.IntersectXZPlane(cr, nextPlaneX, nextPlaneY);
+                float it = RayUtils.IntersectXZPlane(cr, nextPlaneX * invscale.X, nextPlaneY * invscale.Y);
                 Vector3 newpos = cr.AtT(it);
-                float nx = MathF.Floor((origPos.X + newpos.X) * 0.5f) + 0.5f;
-                float ny = MathF.Floor((origPos.Y + newpos.Z) * 0.5f) + 0.5f;
+                float nx = MathF.Floor((origPos.X + newpos.X) * mip.width * 0.5f) + 0.5f;
+                float ny = MathF.Floor((origPos.Y + newpos.Z) * mip.width * 0.5f) + 0.5f;
                 Vector2 np = new Vector2(nx, ny) * invscale;
                 if (MathF.Abs(np.X - pixelCenter.X) >= invscale.X)
                     break;
                 if (MathF.Abs(np.Y - pixelCenter.Y) >= invscale.Y)
                     break;
-                Vector2 p = new Vector2(newpos.X, newpos.Z) * invscale;
 
                 float v = mip.Sample(np.X, np.Y);
                 if (prevY < v || newpos.Y < v)
@@ -238,7 +246,6 @@ namespace SoftwareRayTrace
                     if (lod > 0)
                     {
                         Ray r = cr;
-                        r.pos *= new Vector3(invscale.X, 1, invscale.Y);
                         isHit = RaycastStep(r, lod - 1, np, out outT);
                     }
                     else
@@ -253,7 +260,7 @@ namespace SoftwareRayTrace
                 prevY = cr.pos.Y;
                 //this.topDown.DrawLine(new Vector2(p.X, p.Y), new Vector2(np.X, np.Y), DrawCtrl.RGBToI(0, 0, 255));
                 bool foundPoint = isHit && lod == 0;
-                this.topDown.DrawPoint(new Vector2(origPos.X * invscale.X, origPos.Y * invscale.Y), foundPoint ? 1 : 0,
+                this.topDown.DrawPoint(new Vector2(origPos.X, origPos.Y), foundPoint ? 1 : 0,
                     foundPoint ? DrawCtrl.RGBToI(0, 255, 0) : DrawCtrl.RGBToI(255, 0, 0));
                 if (isHit) break;
             }
@@ -283,6 +290,12 @@ namespace SoftwareRayTrace
         private void LODCb_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             curLod = int.Parse((string)this.LODCb.SelectedItem);
+            Repaint();
+        }
+
+        private void camViewType_Checked(object sender, RoutedEventArgs e)
+        {
+            raycastMode = (sender as CheckBox).IsChecked == true;
             Repaint();
         }
     }

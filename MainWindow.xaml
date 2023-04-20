@@ -15,9 +15,11 @@
             <TextBlock Text="LOD" Margin="5,5"/>
             <ComboBox x:Name="LODCb" SelectionChanged="LODCb_SelectionChanged" />
             <TextBlock Margin="5" Text="Pos" />
-            <TextBlock x:Name="rayPos" Margin="5" Background="Blue" Foreground="White" Width="300"/>
+            <TextBox x:Name="rayPos" Margin="5" Background="Blue" Foreground="White" Width="300"/>
             <TextBlock Margin="5" Text="Dir" />
-            <TextBlock x:Name="rayDir" Margin="5" Background="Blue" Foreground="White" Width="300"/>
+            <TextBox x:Name="rayDir" Margin="5" Background="Blue" Foreground="White" Width="300"/>
+            <TextBlock Margin="5" Text="Raycast View" />
+            <CheckBox  Margin="5" x:Name="camViewType" Checked="camViewType_Checked" Unchecked="camViewType_Checked"/>
         </StackPanel>
         <Grid Grid.Row="1" >
             <Grid.ColumnDefinitions>

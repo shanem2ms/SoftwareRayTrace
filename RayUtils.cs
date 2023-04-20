@@ -34,7 +34,7 @@ namespace SoftwareRayTrace
     }
 
 
-    struct Plane
+    public struct Plane
     {
         public Plane(float _d, Vector3 _n)
         {
@@ -99,7 +99,14 @@ namespace SoftwareRayTrace
                 Vector3 pos = (Cube.SidePlanes[i].d * Cube.SidePlanes[i].nrm * scale) + min;
                 float t = IntersectPlane(r, pos, Cube.SidePlanes[i].nrm);
                 if (float.IsFinite(t) && t > 0)
-                    outT = MathF.Min(t, outT);
+                {
+                    Vector3 hitpos = r.AtT(t);
+                    if (hitpos.X >= min.X && hitpos.Y >= min.Y && hitpos.Z >= min.Z &&
+                        hitpos.X <= max.X && hitpos.Y <= max.Y && hitpos.Z <= max.Z)
+                    {
+                        outT = MathF.Min(t, outT);
+                    }
+                }
             }
             return outT;
         }
@@ -116,28 +123,142 @@ namespace SoftwareRayTrace
             return new Ray(new Vector3(v0.X, v0.Y, v0.Z), dir);
         }
 
+        public static bool IntersectAABoxRay(Vector3 boxMin, Vector3 boxMax, Ray ray, out float tIn, out float tOut)
+        {
+            tIn = -float.MaxValue;
+            tOut = float.MaxValue;
+            float t0, t1;
+            const float epsilon = 0.0000001f;
+
+            // YZ plane.
+            if (MathF.Abs(ray.dir.X) < epsilon)
+            {
+                // Ray parallel to plane.
+                if (ray.pos.X < boxMin.X || ray.pos.X > boxMax.X)
+                {
+                    return false;
+                }
+            }
+
+            // XZ plane.
+            if (MathF.Abs(ray.dir.Y) < epsilon)
+            {
+                // Ray parallel to plane.
+                if (ray.pos.Y < boxMin.Y || ray.pos.Y > boxMax.Y)
+                {
+                    return false;
+                }
+            }
+
+            // XY plane.
+            if (MathF.Abs(ray.dir.Z) < epsilon)
+            {
+                // Ray parallel to plane.
+                if (ray.pos.Z < boxMin.Z || ray.pos.Z > boxMax.Z)
+                {
+                    return false;
+                }
+            }
+
+            // YZ plane.
+            t0 = (boxMin.X - ray.pos.X) / ray.dir.X;
+            t1 = (boxMax.X - ray.pos.X) / ray.dir.X;
+
+            if (t0 > t1)
+            {
+                (t0, t1) = (t1, t0);
+            }
+
+            if (t0 > tIn)
+            {
+                tIn = t0;
+            }
+            if (t1 < tOut)
+            {
+                tOut = t1;
+            }
+
+            if (tIn > tOut || tOut < 0)
+            {
+                return false;
+            }
+
+            // XZ plane.
+            t0 = (boxMin.Y - ray.pos.Y) / ray.dir.Y;
+            t1 = (boxMax.Y - ray.pos.Y) / ray.dir.Y;
+
+            if (t0 > t1)
+            {
+                (t0, t1) = (t1, t0);
+            }
+
+            if (t0 > tIn)
+            {
+                tIn = t0;
+            }
+            if (t1 < tOut)
+            {
+                tOut = t1;
+            }
+
+            if (tIn > tOut || tOut < 0)
+            {
+                return false;
+            }
+
+            // XY plane.
+            t0 = (boxMin.Z - ray.pos.Z) / ray.dir.Z;
+            t1 = (boxMax.Z - ray.pos.Z) / ray.dir.Z;
+
+            if (t0 > t1)
+            {
+                (t0, t1) = (t1, t0);
+            }
+
+            if (t0 > tIn)
+            {
+                tIn = t0;
+            }
+            if (t1 < tOut)
+            {
+                tOut = t1;
+            }
+
+            if (tIn > tOut || tOut < 0)
+            {
+                return false;
+            }
+
+            return true;
+        }
     }
 
     public class Raycaster
     {
+        const float height = 0.1f;
         MipArray mipArray;
         public Raycaster(MipArray _mipArray)
         {
             mipArray = _mipArray;
         }
 
-        public bool Raycast(Ray ray, out Vector2 outT)
+        public bool Raycast(Ray ray, out Vector3 outT)
         {
-            return Raycast(ray, mipArray.MaxLod, new Vector2(0.5f, 0.5f), out outT);
+            float t0, t1;
+            bool intersected = RayUtils.IntersectAABoxRay(new Vector3(0, 0, 0), new Vector3(1, height, 1), ray, out t0, out t1);
+            Vector3 hitpos = ray.AtT(t0);
+            ray.pos = hitpos;
+
+            return RaycastStep(ray, mipArray.MaxLod, new Vector2(0.5f, 0.5f), out outT);
         }
-        bool Raycast(Ray ray, int lod, Vector2 pixelCenter, out Vector2 outT)
+        bool RaycastStep(Ray ray, int lod, Vector2 pixelCenter, out Vector3 outT)
         {
-            outT = new Vector2(-1, -1);
+            outT = new Vector3(-1, -1, -1);
             bool isHit = false;
             Mip mip = mipArray.mips[lod];
             Vector2 invscale = new Vector2(1.0f / mip.width, 1.0f / mip.height);
             Ray cr = ray;
-            cr.pos = ray.pos * new Vector3(mip.width, 1, mip.height);
+            //cr.pos = ray.pos * new Vector3(mip.width, 1, mip.height);
 
             bool leftPlane = cr.dir.X < 0;
             bool backPlane = cr.dir.Z < 0;
@@ -146,21 +267,20 @@ namespace SoftwareRayTrace
             while (!isHit)
             {
                 Vector2 origPos = new Vector2(cr.pos.X, cr.pos.Z);
-                float nextPlaneX = leftPlane ? MathF.Floor(cr.pos.X - epsilon) :
-                    MathF.Floor(cr.pos.X + epsilon + 1);
-                float nextPlaneY = backPlane ? MathF.Floor(cr.pos.Z - epsilon) :
-                    MathF.Floor(cr.pos.Z + epsilon + 1);
+                float nextPlaneX = leftPlane ? MathF.Floor(cr.pos.X * mip.width - epsilon) :
+                    MathF.Floor(cr.pos.X * mip.width + epsilon + 1);
+                float nextPlaneY = backPlane ? MathF.Floor(cr.pos.Z * mip.height - epsilon) :
+                    MathF.Floor(cr.pos.Z * mip.height + epsilon + 1);
 
-                float it = RayUtils.IntersectXZPlane(cr, nextPlaneX, nextPlaneY);
+                float it = RayUtils.IntersectXZPlane(cr, nextPlaneX * invscale.X, nextPlaneY * invscale.Y);
                 Vector3 newpos = cr.AtT(it);
-                float nx = MathF.Floor((origPos.X + newpos.X) * 0.5f) + 0.5f;
-                float ny = MathF.Floor((origPos.Y + newpos.Z) * 0.5f) + 0.5f;
+                float nx = MathF.Floor((origPos.X + newpos.X) * mip.width * 0.5f) + 0.5f;
+                float ny = MathF.Floor((origPos.Y + newpos.Z) * mip.width * 0.5f) + 0.5f;
                 Vector2 np = new Vector2(nx, ny) * invscale;
                 if (MathF.Abs(np.X - pixelCenter.X) >= invscale.X)
                     break;
                 if (MathF.Abs(np.Y - pixelCenter.Y) >= invscale.Y)
                     break;
-                Vector2 p = new Vector2(newpos.X, newpos.Z) * invscale;
 
                 float v = mip.Sample(np.X, np.Y);
                 if (prevY < v || newpos.Y < v)
@@ -168,12 +288,11 @@ namespace SoftwareRayTrace
                     if (lod > 0)
                     {
                         Ray r = cr;
-                        r.pos *= new Vector3(invscale.X, 1, invscale.Y);
-                        isHit = Raycast(r, lod - 1, np, out outT);
+                        isHit = RaycastStep(r, lod - 1, np, out outT);
                     }
                     else
                     {
-                        outT = new Vector2(np.X, np.Y);
+                        outT = new Vector3(np.X, np.Y, v);
                         isHit = true;
                     }
                     // Hit
