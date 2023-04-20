@@ -232,14 +232,28 @@ namespace SoftwareRayTrace
             return true;
         }
     }
+    public struct TraceData
+    {
+        public Vector3 pos;
+        public Vector3 nextPos;
+        public Vector2 spos;
+        public float val;
+        public int lod;
+        public bool foundPoint;
+    }
 
     public class Raycaster
     {
         const float height = 0.1f;
         MipArray mipArray;
-        public Raycaster(MipArray _mipArray)
+        int minLod;
+
+        public delegate void TraceFuncDelegate(TraceData data);
+        public TraceFuncDelegate? TraceFunc = null;
+        public Raycaster(MipArray _mipArray, int _minLod)
         {
             mipArray = _mipArray;
+            minLod = _minLod;
         }
 
         public bool Raycast(Ray ray, out Vector3 outT)
@@ -266,7 +280,6 @@ namespace SoftwareRayTrace
             float prevY = cr.pos.Y;
             while (!isHit)
             {
-                Vector2 origPos = new Vector2(cr.pos.X, cr.pos.Z);
                 float nextPlaneX = leftPlane ? MathF.Floor(cr.pos.X * mip.width - epsilon) :
                     MathF.Floor(cr.pos.X * mip.width + epsilon + 1);
                 float nextPlaneY = backPlane ? MathF.Floor(cr.pos.Z * mip.height - epsilon) :
@@ -274,18 +287,20 @@ namespace SoftwareRayTrace
 
                 float it = RayUtils.IntersectXZPlane(cr, nextPlaneX * invscale.X, nextPlaneY * invscale.Y);
                 Vector3 newpos = cr.AtT(it);
-                float nx = MathF.Floor((origPos.X + newpos.X) * mip.width * 0.5f) + 0.5f;
-                float ny = MathF.Floor((origPos.Y + newpos.Z) * mip.width * 0.5f) + 0.5f;
+                float nx = MathF.Floor((cr.pos.X + newpos.X) * mip.width * 0.5f) + 0.5f;
+                float ny = MathF.Floor((cr.pos.Y + newpos.Z) * mip.width * 0.5f) + 0.5f;
                 Vector2 np = new Vector2(nx, ny) * invscale;
                 if (MathF.Abs(np.X - pixelCenter.X) >= invscale.X)
                     break;
                 if (MathF.Abs(np.Y - pixelCenter.Y) >= invscale.Y)
                     break;
 
-                float v = mip.Sample(np.X, np.Y);
+                float v = mip.Sample(np.X, np.Y) * height;
+                if (TraceFunc != null) TraceFunc(
+                    new TraceData() { pos = cr.pos, nextPos = newpos, foundPoint = false, lod = lod, spos = np, val = v });
                 if (prevY < v || newpos.Y < v)
                 {
-                    if (lod > 0)
+                    if (lod > minLod)
                     {
                         Ray r = cr;
                         isHit = RaycastStep(r, lod - 1, np, out outT);
@@ -293,6 +308,8 @@ namespace SoftwareRayTrace
                     else
                     {
                         outT = new Vector3(np.X, np.Y, v);
+                        if (TraceFunc != null) TraceFunc(
+                            new TraceData() { pos = cr.pos, nextPos = newpos, foundPoint = true, lod = lod, spos = np, val = v });
                         isHit = true;
                     }
                     // Hit
@@ -301,7 +318,6 @@ namespace SoftwareRayTrace
                 cr.pos = newpos;
                 prevY = cr.pos.Y;
                 //this.topDown.DrawLine(new Vector2(p.X, p.Y), new Vector2(np.X, np.Y), DrawCtrl.RGBToI(0, 0, 255));
-                bool foundPoint = isHit && lod == 0;
                 if (isHit) break;
             }
 

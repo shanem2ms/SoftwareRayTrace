@@ -25,9 +25,11 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="1*"/>
                 <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="150"/>
             </Grid.ColumnDefinitions>
             <local:DrawCtrl Grid.Column="0" BitmapSize="256" x:Name="topDown"/>
             <local:DrawCtrl Grid.Column="1" BitmapSize="1024" x:Name="camView"/>
+            <ListBox x:Name="TraceItemsList" Grid.Column="2" />
         </Grid>
     </Grid>
 </Window>

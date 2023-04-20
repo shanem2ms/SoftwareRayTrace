@@ -236,7 +236,7 @@ namespace SoftwareRayTrace
         public unsafe void DrawView(MipArray mipArray, Matrix4x4 invMat)
         {
             Clear();
-            Raycaster raycaster = new Raycaster(mipArray);
+            Raycaster raycaster = new Raycaster(mipArray, 0);
             nint pBackBuffer = writeableBitmap.BackBuffer;
             Vector2 scale = new Vector2(1.0f / (float)writeableBitmap.Width, 
                 1.0f / (float)writeableBitmap.Height);
@@ -250,7 +250,7 @@ namespace SoftwareRayTrace
                     Vector3 hitPos;
                     if (raycaster.Raycast(r, out hitPos))
                     {                        
-                        * ((int*)pRowPtr) = RGBToI((byte)(hitPos.Z * 255), (byte)(hitPos.Z * 255), 100);
+                        * ((int*)pRowPtr) = RGBToI((byte)(hitPos.Z * 10 * 255), (byte)(hitPos.Z * 10 * 255), 100);
                     }
                     else
                         * ((int*)pRowPtr) = RGBToI(0,100,255);
