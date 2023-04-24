@@ -246,11 +246,13 @@ namespace SoftwareRayTrace
                 for (int x = 0; x < writeableBitmap.Width; ++x )
                 {
                     Vector2 vps = new Vector2(x, y) * scale;
-                    Ray r = RayUtils.RayFromView(vps, invMat);
-                    Vector3 hitPos;
-                    if (raycaster.Raycast(r, out hitPos))
+                    float viewDist;
+                    Ray r = RayUtils.RayFromView(vps, invMat, out viewDist);
+                    Vector3 color;
+                    int numIters;
+                    if (raycaster.SdfCast(r, viewDist, out color, out numIters))
                     {                        
-                        * ((int*)pRowPtr) = RGBToI((byte)(hitPos.Z * 10 * 255), (byte)(hitPos.Z * 10 * 255), 100);
+                        * ((int*)pRowPtr) = RGBToI((byte)(color.X * 255), (byte)(color.Y * 255), (byte)(color.Z * 255));
                     }
                     else
                         * ((int*)pRowPtr) = RGBToI(0,100,255);

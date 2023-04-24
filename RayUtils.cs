@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Collections;
 using System.Windows.Media.Imaging;
 using System.ComponentModel.DataAnnotations;
+using System.Reflection.Metadata;
 
 namespace SoftwareRayTrace
 {
@@ -111,7 +112,7 @@ namespace SoftwareRayTrace
             return outT;
         }
 
-        public static Ray RayFromView(Vector2 vps, Matrix4x4 invMat)
+        public static Ray RayFromView(Vector2 vps, Matrix4x4 invMat, out float dist)
         {
             Vector4 v0 = Vector4.Transform(new Vector4(vps.X, vps.Y, 0.0f, 1), invMat);
             Vector4 v1 = Vector4.Transform(new Vector4(vps.X, vps.Y, 1.0f, 1), invMat);
@@ -119,10 +120,20 @@ namespace SoftwareRayTrace
             v1 /= v1.W;
 
             Vector4 dir4 = v1 - v0;
-            Vector3 dir = Vector3.Normalize(new Vector3(dir4.X, dir4.Y, dir4.Z));
+            Vector3 dir3 = new Vector3(dir4.X, dir4.Y, dir4.Z);
+            dist = dir3.Length();
+            Vector3 dir = Vector3.Normalize(dir3);
             return new Ray(new Vector3(v0.X, v0.Y, v0.Z), dir);
         }
 
+        public static float SdfBox(Vector3 p, Vector3 o, Vector3 b)
+        {
+            Vector3 value = Vector3.Abs(p - o) - b;
+
+            Vector3 d = Vector3.Abs(p - o) - b;
+            return MathF.Min(MathF.Max(d.X, MathF.Max(d.Y, d.Z)), 0.0f) + 
+                new Vector3(MathF.Max(d.X, 0.0f), MathF.Max(d.Y, 0.0f), MathF.Max(d.Z, 0.0f)).Length();
+        }
         public static bool IntersectAABoxRay(Vector3 boxMin, Vector3 boxMax, Ray ray, out float tIn, out float tOut)
         {
             tIn = -float.MaxValue;
@@ -133,7 +144,6 @@ namespace SoftwareRayTrace
             // YZ plane.
             if (MathF.Abs(ray.dir.X) < epsilon)
             {
-                // Ray parallel to plane.
                 if (ray.pos.X < boxMin.X || ray.pos.X > boxMax.X)
                 {
                     return false;
@@ -256,7 +266,67 @@ namespace SoftwareRayTrace
             minLod = _minLod;
         }
 
-        public bool Raycast(Ray ray, out Vector3 outT)
+        Vector2 Map(Vector3 pos)
+        {
+            int lod = this.mipArray.MaxLod - 2;
+            Mip mip = this.mipArray.mips[lod];
+            Vector2 invScale = new Vector2(1.0f / mip.width, 1.0f / mip.height);
+            Vector2 minv = new Vector2(float.MaxValue, 0);
+            for (int x = 0; x < mip.width; ++x)
+            {
+                for (int y = 0; y < mip.height; ++y)
+                {
+                    float u = ((float)x + 0.5f) * invScale.X;
+                    float v = ((float)y + 0.5f) * invScale.Y;
+                    float w = mip.Sample(u, v) * height * 0.5f;
+                    float vdist = RayUtils.SdfBox(pos, new Vector3(u, w, v), new Vector3(invScale.X, w, invScale.Y));
+                    if (vdist < minv.X)
+                    {
+                        minv.X = vdist;
+                        minv.Y = w * 20;
+                    }
+                }
+            }
+            return minv;
+        }
+
+        Vector3 CalcNormal(Vector3 pos)
+        {
+            Vector2 e = new Vector2(1.0f, -1.0f) * 0.5773f * 0.005f;
+            Vector3 xyy = new Vector3(e.X, e.X, e.Y);
+            Vector3 yyx = new Vector3(e.Y, e.Y, e.X);
+            Vector3 yxy = new Vector3(e.Y, e.X, e.Y);
+            Vector3 xxx = new Vector3(e.X, e.X, e.X);
+            return Vector3.Normalize(xyy * Map(pos + xyy).X +
+                              yyx * Map(pos + yyx).X +
+                              yxy * Map(pos + yxy).X +
+                              xxx * Map(pos + xxx).X);
+        }
+        public bool SdfCast(Ray ray, float maxT, out Vector3 outT, out int numIters)
+        {
+            bool ishit = false;
+            numIters = 0;
+            float t = 0;
+            const float epsilon = 1e-2f;
+            outT = Vector3.Zero;
+            while (t < maxT && numIters < 50)
+            {
+                Vector3 pos = ray.AtT(t);
+                float dist = Map(pos).X;
+                if (dist <= epsilon * t)
+                {
+                    float dist0 = Map(pos).X;
+                    Vector3 nrm = CalcNormal(pos);
+                    outT = nrm * 0.5f + new Vector3(0.5f, 0.5f, 0.5f);
+                    return true;
+                }
+                t += dist;
+                numIters++;
+            }
+
+            return ishit;
+        }
+        public bool Raycast(Ray ray, float maxT, out Vector3 outT)
         {
             float t0, t1;
             bool intersected = RayUtils.IntersectAABoxRay(new Vector3(0, 0, 0), new Vector3(1, height, 1), ray, out t0, out t1);

@@ -35,9 +35,9 @@ namespace SoftwareRayTrace
         Matrix4x4 projMat = 
                 Matrix4x4.CreatePerspectiveFieldOfView(60.0f * MathF.PI / 180.0f, 1.0f, 0.01f, 100);
 
-        float yaw = 0.0823334157f;
-        float pitch = -0.3061352f;
-        Vector3 pos = new Vector3(-0.11f, 0.2200002f, -1.340001f);
+        float yaw = -0.006532222f;
+        float pitch = -0.55914086f;
+        Vector3 pos = new Vector3(-0.11f, 0.24000022f, -2.0600004f);
         bool raycastMode = false;
         TraceStep curTs;
         public Matrix4x4 ViewProj
@@ -111,7 +111,8 @@ namespace SoftwareRayTrace
             double xPos = e.GetPosition(this.camView).X / this.camView.ActualWidth;
             double yPos = e.GetPosition(this.camView).Y / this.camView.ActualHeight;
             Vector2 vps = new Vector2((float)xPos, (float)(yPos));
-            Ray r = RayUtils.RayFromView(vps, InvMat);
+            float viewDist;
+            Ray r = RayUtils.RayFromView(vps, InvMat, out viewDist);
             this.curTs.ray = r;
             Repaint();
 
@@ -167,6 +168,12 @@ namespace SoftwareRayTrace
                 case Key.Z:
                     this.pos.Y -= speed;
                     break;
+                case Key.O:
+                    Debug.WriteLine($"        float yaw = {yaw}f;");
+                    Debug.WriteLine($"        float pitch = {pitch}f;");
+                    Debug.WriteLine($"        Vector3 pos = new Vector3({pos.X}f, {pos.Y}f, {pos.Z}f);");
+
+                    break;
             }
             Repaint();
             base.OnKeyDown(e);
@@ -186,7 +193,9 @@ namespace SoftwareRayTrace
             Raycaster raycaster = new Raycaster(this.mipArray, 0);
             raycaster.TraceFunc = RayCastTracePt;
 
-            raycaster.Raycast(this.curTs.ray, out _);
+            int numIters;
+            raycaster.SdfCast(this.curTs.ray, 100, out _, out numIters);
+            TraceItemsList.Items.Add($"numiters = {numIters}");
 
             DrawPath(this.curTs.ray);
             //FindIntersectionPixels(this.curTs.ray, this.curLod);
